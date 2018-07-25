@@ -136,8 +136,10 @@ def gcf():
     :return: :any:`Figure`
     """
     if current.figure is None:
+        print('making new fig')
         return figure()
     else:
+        print('returning current vigure')
         return current.figure
 
 
@@ -670,7 +672,7 @@ def volshow(data, lighting=False, data_min=None, data_max=None,
     :param extent: list of [[xmin, xmax], [ymin, ymax], [zmin, zmax]] values that define the bounds of the volume, otherwise the viewport is used
     :return:
     """
-    fig = gcf()
+    fig = gcf();
 
     if tf is None:
         tf = transfer_function(level, opacity, level_width, controls=controls, max_opacity=max_opacity)

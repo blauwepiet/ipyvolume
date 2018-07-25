@@ -4,19 +4,20 @@ var THREE = require('three');
 var serialize = require('./serialize.js');
 import * as values from './values'
 var semver_range = require('./utils.js').semver_range;
+var pythreejs = require('jupyter-threejs');
 
-var MeshView = widgets.WidgetView.extend( {
-    render: function() {
+var MeshModel = pythreejs.Object3DModel.extend({
+    init_object: function(renderer) {
         //console.log("created mesh view, parent is")
         //console.log(this.options.parent)
-        this.renderer = this.options.parent;
+        this.renderer = renderer;
         this.previous_values = {}
         this.attributes_changed = {}
         window.last_mesh = this;
         this.meshes = []
         this.texture_loader = new THREE.TextureLoader()
         this.textures = null;
-        if(this.model.get('texture')) {
+        if(this.get('texture')) {
             this._load_textures()
         }
 
@@ -34,27 +35,27 @@ var MeshView = widgets.WidgetView.extend( {
                 texture: { type: 't', value: null },
                 texture_previous: { type: 't', value: null },
         }
-        this.material = this.model.get('material').obj.clone()
-        this.material_rgb = this.model.get('material').obj.clone()
-        this.line_material = this.model.get('line_material').obj.clone()
-        this.line_material_rgb = this.model.get('line_material').obj.clone()
+        this.material = this.get('material').obj.clone()
+        this.material_rgb = this.get('material').obj.clone()
+        this.line_material = this.get('line_material').obj.clone()
+        this.line_material_rgb = this.get('line_material').obj.clone()
         this.materials = [this.material, this.material_rgb, this.line_material, this.line_material_rgb]
         this._update_materials()
-        this.model.get('material').on('change', () => {
+        this.get('material').on('change', () => {
             this._update_materials()
             this.renderer.update()
         })
-        this.model.get('line_material').on('change', () => {
+        this.get('line_material').on('change', () => {
             this._update_materials()
             this.renderer.update()
         })
 
         this.create_mesh()
         this.add_to_scene()
-        this.model.on("change:color change:sequence_index change:x change:y change:z change:v change:u change:triangles change:lines",   this.on_change, this)
-        this.model.on("change:geo change:connected", this.update_, this)
-        this.model.on("change:texture", this._load_textures, this)
-        this.model.on("change:visible", this.update_visibility, this)
+        this.on("change:color change:sequence_index change:x change:y change:z change:v change:u change:triangles change:lines",   this.on_change, this)
+        this.on("change:geo change:connected", this.update_, this)
+        this.on("change:texture", this._load_textures, this)
+        this.on("change:visible", this.update_visibility, this)
     },
     update_visibility: function () {
         this._update_materials()
@@ -62,7 +63,7 @@ var MeshView = widgets.WidgetView.extend( {
     },
 
     _load_textures: function() {
-        var texture = this.model.get('texture');
+        var texture = this.get('texture');
         if(texture.stream) { // instanceof media.MediaStreamModel) {
             this.textures = null
             this.texture_video = document.createElement('video')
@@ -79,7 +80,7 @@ var MeshView = widgets.WidgetView.extend( {
                 this.update_()
             }, this))
         } else {
-            this.textures = _.map(this.model.get('texture'), function(texture_url) {
+            this.textures = _.map(this.get('texture'), function(texture_url) {
                 return this.texture_loader.load(texture_url, _.bind(function(texture) {
                     texture.wrapS = THREE.RepeatWrapping;
                     texture.wrapT = THREE.RepeatWrapping;
@@ -106,9 +107,9 @@ var MeshView = widgets.WidgetView.extend( {
         }, this)
     },
     on_change: function(attribute) {
-        _.mapObject(this.model.changedAttributes(), function(val, key){
+        _.mapObject(this.changedAttributes(), function(val, key){
             //console.log("changed " +key)
-            this.previous_values[key] = this.model.previous(key)
+            this.previous_values[key] = this.previous(key)
             // attributes_changed keys will say what needs to be animated, it's values are the properties in
             // this.previous_values that need to be removed when the animation is done
             // we treat changes in _selected attributes the same
@@ -116,7 +117,7 @@ var MeshView = widgets.WidgetView.extend( {
             if (key_animation == "sequence_index") {
                 var animated_by_sequence = ['x', 'y', 'z', 'u', 'v', 'color']
                 _.each(animated_by_sequence, function(name) {
-                    if(_.isArray(this.model.get(name)) && this.model.get(name).length > 1) {
+                    if(_.isArray(this.get(name)) && this.get(name).length > 1) {
                         this.attributes_changed[name] = [name, 'sequence_index']
                     }
                 }, this)
@@ -128,7 +129,7 @@ var MeshView = widgets.WidgetView.extend( {
             else if(key_animation == "lines") {
                 // direct change, no animation
             }
-	        else if(key_animation == "selected") { // and no explicit animation on this one
+            else if(key_animation == "selected") { // and no explicit animation on this one
                 this.attributes_changed["color"] = [key]
             } else {
                 this.attributes_changed[key_animation] = [key]
@@ -182,10 +183,10 @@ var MeshView = widgets.WidgetView.extend( {
         }
     },
     get_current: function(name, index, default_value) {
-        return this._get_value(this.model.get(name), index, default_value)
+        return this._get_value(this.get(name), index, default_value)
     },
     get_previous: function(name, index, default_value) {
-        return this._get_value(this.previous_values[name] || this.model.get(name), index, default_value)
+        return this._get_value(this.previous_values[name] || this.get(name), index, default_value)
     },
     _get_value_vec3: function(value, index, default_value) {
         var default_value = default_value;
@@ -197,25 +198,25 @@ var MeshView = widgets.WidgetView.extend( {
             return value
     },
     get_current_vec3: function(name, index, default_value) {
-        return this._get_value_vec3(this.model.get(name), index, default_value)
+        return this._get_value_vec3(this.get(name), index, default_value)
     },
     get_previous_vec3: function(name, index, default_value) {
-        return this._get_value_vec3(this.previous_values[name] || this.model.get(name), index, default_value)
+        return this._get_value_vec3(this.previous_values[name] || this.get(name), index, default_value)
     },
     _update_materials: function() {
-        this.material.copy(this.model.get('material').obj)
-        this.material_rgb.copy(this.model.get('material').obj)
-        this.line_material.copy(this.model.get('line_material').obj)
-        this.line_material_rgb.copy(this.model.get('line_material').obj)
+        this.material.copy(this.get('material').obj)
+        this.material_rgb.copy(this.get('material').obj)
+        this.line_material.copy(this.get('line_material').obj)
+        this.line_material_rgb.copy(this.get('line_material').obj)
         this.material_rgb.defines = {USE_RGB: true}
         this.line_material.defines = {AS_LINE: true}
         this.line_material_rgb.defines = {AS_LINE: true, USE_RGB: true}
         this.material.extensions = {derivatives: true}
         // locally and the visible with this object's visible trait
-        this.material.visible = this.material.visible && this.model.get('visible');
-        this.material_rgb.visible = this.material.visible && this.model.get('visible');
-        this.line_material.visible = this.line_material.visible && this.model.get('visible');
-        this.line_material_rgb.visible = this.line_material.visible && this.model.get('visible');
+        this.material.visible = this.material.visible && this.get('visible');
+        this.material_rgb.visible = this.material.visible && this.get('visible');
+        this.line_material.visible = this.line_material.visible && this.get('visible');
+        this.line_material_rgb.visible = this.line_material.visible && this.get('visible');
         this.materials.forEach((material) => {
             material.vertexShader = require('raw-loader!../glsl/mesh-vertex.glsl');
             material.fragmentShader = require('raw-loader!../glsl/mesh-fragment.glsl');
@@ -224,7 +225,7 @@ var MeshView = widgets.WidgetView.extend( {
             material.transparant = true;
             material.depthTest = true;
         })
-        var texture = this.model.get('texture');
+        var texture = this.get('texture');
         if(texture && this.textures) {
             this.material.defines['USE_TEXTURE'] = true;
         }
@@ -241,7 +242,7 @@ var MeshView = widgets.WidgetView.extend( {
         this.meshes = []
         var sequence_index_original, sequence_index_previous_original;
 
-        var sequence_index = sequence_index_original = this.model.get("sequence_index");
+        var sequence_index = sequence_index_original = this.get("sequence_index");
         var sequence_index_previous = sequence_index_previous_original = sequence_index;
 
         if(typeof this.previous_values["sequence_index"] != "undefined") {
@@ -289,7 +290,7 @@ var MeshView = widgets.WidgetView.extend( {
         
         if (time_delta == 0) {
             // occurs when we don't change keyframes, but just a property
-			time_delta = 1;
+            time_delta = 1;
         }
         //console.log('>>>', sequence_index, sequence_index_previous, time_offset, time_delta)
 
@@ -328,7 +329,7 @@ var MeshView = widgets.WidgetView.extend( {
         previous.merge_to_vec3(['x', 'y', 'z'], 'vertices')
         current.ensure_array(['color'])
         previous.ensure_array(['color'])
-        var triangles = this.model.get('triangles')
+        var triangles = this.get('triangles')
         if(triangles) {
             triangles = triangles[0]
             var geometry = new THREE.BufferGeometry();
@@ -337,7 +338,7 @@ var MeshView = widgets.WidgetView.extend( {
             geometry.addAttribute('color', new THREE.BufferAttribute(current.array_vec4['color'], 4));
             geometry.addAttribute('color_previous', new THREE.BufferAttribute(previous.array_vec4['color'], 4));
             geometry.setIndex(new THREE.BufferAttribute(triangles, 1))
-            var texture = this.model.get('texture');
+            var texture = this.get('texture');
             var u = current.array['u']
             var v = current.array['v']
             if(texture && u && v && this.textures) {
@@ -362,8 +363,8 @@ var MeshView = widgets.WidgetView.extend( {
             this.meshes.push(this.surface_mesh);
         }
 
-	    var lines = this.model.get('lines');
-	    if(lines) {
+        var lines = this.get('lines');
+        if(lines) {
             var geometry = new THREE.BufferGeometry();
 
             geometry.addAttribute('position', new THREE.BufferAttribute(current.array_vec3['vertices'], 3))
@@ -403,16 +404,11 @@ var MeshView = widgets.WidgetView.extend( {
             }, done, this);
         }, this)
         this.attributes_changed = {};
-    }
-});
-
-var MeshModel = widgets.WidgetModel.extend({
+    },
     defaults: function() {
-        return _.extend(widgets.WidgetModel.prototype.defaults(), {
+        return _.extend(pythreejs.Object3DModel.prototype.defaults(), {
             _model_name : 'MeshModel',
-            _view_name : 'MeshView',
             _model_module : 'ipyvolume',
-            _view_module : 'ipyvolume',
             _model_module_version: semver_range,
              _view_module_version: semver_range,
             color: "red",
@@ -435,12 +431,11 @@ var MeshModel = widgets.WidgetModel.extend({
         texture: serialize.texture,
         material: { deserialize: widgets.unpack_models },
         line_material: { deserialize: widgets.unpack_models },
-    }, widgets.WidgetModel.serializers)
+    }, pythreejs.Object3DModel.serializers)
 });
 
 
 
 module.exports = {
-    MeshView:MeshView,
     MeshModel:MeshModel
 }

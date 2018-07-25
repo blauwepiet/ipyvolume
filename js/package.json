@@ -76,6 +76,7 @@
     "three": "^0.91.0",
     "three-text2d": "~0.4.1",
     "underscore": "^1.8.3",
-    "webrtc-adapter": "^4.2.2"
+    "webrtc-adapter": "^4.2.2",
+    "jupyter-threejs": "1.0.0"
   }
 }

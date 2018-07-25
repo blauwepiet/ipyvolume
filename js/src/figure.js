@@ -627,7 +627,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         this.scene_opaque.add(this.wire_box)
         this.scene_opaque.add(this.axes)
 
-        this.mesh_views = {};
+        
         this.scatter_views = {};
         this.volume_views = {};
 
@@ -1299,29 +1299,15 @@ var FigureView = widgets.DOMWidgetView.extend( {
         }
     },
     update_meshes: function() {
-        var meshes = this.model.get('meshes'); // This is always a list?
-        if(meshes.length != 0) { // So now check if list has length 0
-            var current_msh_cids = []
+        var mesh_models = this.model.get('meshes'); // This is always a list?
+        if(mesh_models.length != 0) { // So now check if list has length 0
+            //var current_msh_cids = []
             // Add new meshes if not already as mesh view in figure
-            _.each(meshes, mesh_model => {
-                current_msh_cids.push(mesh_model.cid);
-                if(!(mesh_model.cid in this.mesh_views)){
-                    var options = {parent: this}
-                    var mesh_view = new mesh.MeshView({options: options, model: mesh_model})
-                    mesh_view.render()    
-                    this.mesh_views[mesh_model.cid] = mesh_view
+            _.each(mesh_models, mesh_model => {
+                if(mesh_model.renderer == null){
+                    mesh_model.init_object(this);
                 }
             }, this)
-
-            // Remove old meshes not contained in meshes
-            _.each(this.mesh_views, (mv, cid) => {
-                if(current_msh_cids.indexOf(cid) == -1){
-                    mv.remove_from_scene();
-                    delete this.mesh_views[cid];
-                }
-            },this)
-        } else {
-            this.mesh_views = {}
         }
     },
     update_volumes: function() {
@@ -1648,8 +1634,8 @@ var FigureView = widgets.DOMWidgetView.extend( {
         _.each(this.scatter_views, scatter => {
             scatter.set_limits(_.pick(this.model.attributes, 'xlim', 'ylim', 'zlim'))
         }, this)
-        _.each(this.mesh_views, mesh_view => {
-            mesh_view.set_limits(_.pick(this.model.attributes, 'xlim', 'ylim', 'zlim'))
+        _.each(this.model.get('meshes'), mesh_model => {
+            mesh_model.set_limits(_.pick(this.model.attributes, 'xlim', 'ylim', 'zlim'))
         }, this)
 
         if(panorama) {
@@ -1749,7 +1735,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         _.each(this.scatter_views, scatter => {
             scatter.mesh.material = scatter.mesh.material_rgb
         }, this)
-        _.each(this.mesh_views, mesh_view => {
+        _.each(this.model.get('meshes'), mesh_view => {
             _.each(mesh_view.meshes, mesh => {
                 mesh.material = mesh.material_rgb
             }, this);
@@ -1796,14 +1782,14 @@ var FigureView = widgets.DOMWidgetView.extend( {
         _.each(this.scatter_views, scatter => {
             scatter.mesh.material = scatter.mesh.material_normal
         }, this)
-        _.each(this.mesh_views, mesh_view => {
+        _.each(this.model.get('meshes'), mesh_view => {
             _.each(mesh_view.meshes, mesh => {
                 mesh.material = mesh.material_normal
             }, this);
         }, this)
 
         // render to screen
-        this.screen_texture = {Volume:this.color_pass_target, Back:this.volume_back_target, Geometry_back:this.geometry_depth_target, Coordinate:this.coordinate_texture}[this.model.get("show")]
+        this.screen_texture = {Volume:this.color_pass_target.texture, Back:this.volume_back_target.texture, Geometry_back:this.geometry_depth_target.depthTexture, Coordinate:this.coordinate_texture.texture}[this.model.get("show")]
         this.screen_material.uniforms.tex.value = this.screen_texture.texture
         //this.renderer.clearTarget(this.renderer, true, true, true)
         this.renderer.render(this.screen_scene, this.screen_camera);

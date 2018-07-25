@@ -23,9 +23,7 @@ import ipyvolume._version
 semver_range_frontend = "~" + ipyvolume._version.__version_js__
 
 @widgets.register
-class Mesh(widgets.Widget):
-    _view_name = Unicode('MeshView').tag(sync=True)
-    _view_module = Unicode('ipyvolume').tag(sync=True)
+class Mesh(pythreejs.Object3D):
     _model_name = Unicode('MeshModel').tag(sync=True)
     _model_module = Unicode('ipyvolume').tag(sync=True)
     _view_module_version = Unicode(semver_range_frontend).tag(sync=True)
