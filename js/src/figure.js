@@ -608,14 +608,17 @@ var FigureView = widgets.DOMWidgetView.extend( {
         // we have our 'private' scene, if we use the real scene, it gives buggy
         // results in the volume rendering when we have two views
         this.scene_volume = new THREE.Scene();
+        this.scene_back = new THREE.Scene();
         this.shared_scene = this.model.get('scene').obj
 
         // could be removed when https://github.com/jovyan/pythreejs/issues/176 is solved
         // the default for pythreejs is white, which leads the volume rendering pass to make everything white
         this.scene_volume.background = null
+        this.scene_back.background = null
         this.model.get('scene').on('rerender', () => this.update())
 
         this.scene_volume.add(this.camera);
+        this.scene_back.add(this.camera);
         // the threejs animation system looks at the parent of the camera and sends rerender msg'es
         this.shared_scene.add(this.camera);
 
@@ -636,7 +639,6 @@ var FigureView = widgets.DOMWidgetView.extend( {
 
         // Render pass targets
         // float texture for better depth data, prev name back_texture
-        this.volume_back_target = new THREE.WebGLRenderTarget( render_width, render_height, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, type: THREE.FloatType, format:THREE.RGBAFormat, generateMipmaps: false});
         this.geometry_depth_target = new THREE.WebGLRenderTarget( render_width, render_height, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format:THREE.RGBAFormat, generateMipmaps: false, depthTexture: new THREE.DepthTexture()} );
         this.geometry_depth_target.depthTexture.type = THREE.UnsignedShortType;
         this.color_pass_target = new THREE.WebGLRenderTarget( render_width, render_height, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter});
@@ -805,7 +807,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         var update_center = () => {
             // WARNING: we cheat a little by setting the scene positions (hence the minus) since it is
             // easier, might get us in trouble later?
-            _.each([this.scene_volume, this.scene_opaque, this.scene_geometry], scene => {
+            _.each([this.scene_volume, this.scene_opaque, this.scene_geometry, this.scene_back], scene => {
                 var pos = this.model.get('camera_center');
                 scene.position.set(-pos[0], -pos[1], -pos[2])
             })
@@ -1324,7 +1326,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         this.box_mesh.rotation.x = -(e.beta * Math.PI / 180 + Math.PI*2);
         this.box_mesh.rotation.y = -(e.gamma * Math.PI / 180 + Math.PI*2);*/
 
-        _.each([this.scene_volume, this.scene_opaque, this.scene_geometry], scene => {
+        _.each([this.scene_volume, this.scene_opaque, this.scene_geometry, this.scene_back], scene => {
             scene.rotation.reorder( "XYZ" );
             scene.rotation.x = (e.gamma * Math.PI / 180 + Math.PI*2);
             scene.rotation.y = -(e.beta * Math.PI / 180 + Math.PI*2);
@@ -1571,12 +1573,14 @@ var FigureView = widgets.DOMWidgetView.extend( {
     },
     _render_eye: function(camera) {
         this.camera.updateMatrixWorld();
-        var has_volumes = _.filter(this.model.get("object3D_models"), object3D_model => { return object3D_model.name == 'VolumeModel'; }, this).length != 0;
+        var volume_models = _.filter(this.model.get("object3D_models"), object3D_model => { return object3D_model.name == 'VolumeModel'; }, this)
+        var other_models = _.filter(this.model.get("object3D_models"), object3D_model => { return object3D_model.name != 'VolumeModel'; }, this)
+        var has_volumes = volume_models.length != 0;
         var panorama = this.model.get('panorama_mode') != 'no';
 
         // set material to rgb
-        _.each(this.model.get('object3D_models'), object3d_model => {
-            if(object3d_model.name != 'VolumeModel') object3d_model.set_limits(_.pick(this.model.attributes, 'xlim', 'ylim', 'zlim'))
+        _.each(other_models, object3d_model => {
+            object3d_model.set_limits(_.pick(this.model.attributes, 'xlim', 'ylim', 'zlim'))
         }, this)
 
         if(panorama) {
@@ -1617,12 +1621,15 @@ var FigureView = widgets.DOMWidgetView.extend( {
         // render the back coordinates of the box
         if(has_volumes){
             this.renderer.state.buffers.depth.setClear(0);
-            _.each(_.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }), 
-                            volume_model => {
+            _.each(volume_models, volume_model => {
+                this.scene_back.add(volume_model.obj);
                 volume_model.box_material.side = THREE.BackSide;
                 volume_model.box_material.depthFunc = THREE.GreaterDepth
                 volume_model.vol_box_mesh.material = volume_model.box_material;
                 volume_model.set_limits(_.pick(this.model.attributes, 'xlim', 'ylim', 'zlim'))
+                this.renderer.clearTarget(volume_model.volume_back_target, true, true, true)
+                this.renderer.render(this.scene_back, camera, volume_model.volume_back_target);
+                this.scene_back.remove(volume_model.obj);
             },this)
             this.renderer.clearTarget(this.volume_back_target, true, true, true)
             this.renderer.render(this.scene_volume, camera, this.volume_back_target);
@@ -1649,8 +1656,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
             // so that once we render the box again, each fragment will be processed
             // once.
             this.renderer.context.colorMask(0, 0, 0, 0)
-            _.each(_.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }), 
-                    volume_model => {
+            _.each(volume_models, volume_model => {
                 volume_model.box_material.side = THREE.FrontSide;
                 volume_model.box_material.depthFunc = THREE.LessEqualDepth
             },this)
@@ -1673,7 +1679,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         }
 
         // set RGB material for coordinate texture render
-        _.each(this.model.get('object3D_models'), objec3D_model => {
+        _.each(other_models, objec3D_model => {
             _.each(objec3D_model.obj.children, mesh => {
                 mesh.material = mesh.material_rgb
             }, this);
@@ -1706,8 +1712,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
             this.renderer.context.colorMask(true, true, true, true)
 
             // TODO: if volume perfectly overlap, we render it twice, use polygonoffset and LESS z test?
-            _.each(_.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }), 
-                    volume_model => {
+            _.each(volume_models, volume_model => {
                 // volume_model.set_geometry_depth_tex(this.geometry_depth_target.depthTexture)
                 volume_model.vol_box_mesh.material = this.material_multivolume_depth;
             },this)
@@ -1720,14 +1725,14 @@ var FigureView = widgets.DOMWidgetView.extend( {
         }
 
         // restore materials
-        _.each(this.model.get('object3D_models'), object3D_model => {
+        _.each(other_models, object3D_model => {
             _.each(object3D_model.obj.children, mesh => {
                 mesh.material = mesh.material_normal
             }, this);
         }, this)
 
         // render to screen
-        this.screen_texture = {Volume:this.color_pass_target.texture, Back:this.volume_back_target.texture, Geometry_back:this.geometry_depth_target.depthTexture, Coordinate:this.coordinate_texture.texture}[this.model.get("show")]
+        this.screen_texture = {Volume:this.color_pass_target.texture, Geometry_back:this.geometry_depth_target.depthTexture, Coordinate:this.coordinate_texture.texture}[this.model.get("show")]
         this.screen_material.uniforms.tex.value = this.screen_texture
         //this.renderer.clearTarget(this.renderer, true, true, true)
         this.renderer.render(this.screen_scene, this.screen_camera);
@@ -1854,7 +1859,6 @@ var FigureView = widgets.DOMWidgetView.extend( {
             volume_model.set_render_size(render_width, render_height);
         })
 
-        this.volume_back_target.setSize(render_width, render_height);
         this.geometry_depth_target.setSize(render_width, render_height);
         this.color_pass_target.setSize(render_width, render_height);
         this.screen_pass_target.setSize(render_width, render_height);
