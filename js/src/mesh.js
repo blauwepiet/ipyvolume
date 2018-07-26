@@ -7,14 +7,17 @@ var semver_range = require('./utils.js').semver_range;
 var pythreejs = require('jupyter-threejs');
 
 var MeshModel = pythreejs.Object3DModel.extend({
-    init_object: function(renderer) {
+    initialize: function() {
+        pythreejs.Object3DModel.prototype.initialize.apply(this, arguments);
+        this.initPromise.bind(this).then(this.initialize_mesh_model);
+    },
+    initialize_mesh_model: function() {
         //console.log("created mesh view, parent is")
         //console.log(this.options.parent)
-        this.renderer = renderer;
+        this.renderer = null;
         this.previous_values = {}
         this.attributes_changed = {}
         window.last_mesh = this;
-        this.meshes = []
         this.texture_loader = new THREE.TextureLoader()
         this.textures = null;
         if(this.get('texture')) {
@@ -43,15 +46,14 @@ var MeshModel = pythreejs.Object3DModel.extend({
         this._update_materials()
         this.get('material').on('change', () => {
             this._update_materials()
-            this.renderer.update()
+            this.trigger('need_render');
         })
         this.get('line_material').on('change', () => {
             this._update_materials()
-            this.renderer.update()
+            this.trigger('need_render');
         })
 
         this.create_mesh()
-        this.add_to_scene()
         this.on("change:color change:sequence_index change:x change:y change:z change:v change:u change:triangles change:lines",   this.on_change, this)
         this.on("change:geo change:connected", this.update_, this)
         this.on("change:texture", this._load_textures, this)
@@ -59,9 +61,11 @@ var MeshModel = pythreejs.Object3DModel.extend({
     },
     update_visibility: function () {
         this._update_materials()
-        this.renderer.update()
+        this.trigger('need_render');
     },
-
+    set_parent_renderer: function (renderer) {
+        this.renderer = renderer;
+    },
     _load_textures: function() {
         var texture = this.get('texture');
         if(texture.stream) { // instanceof media.MediaStreamModel) {
@@ -93,17 +97,6 @@ var MeshModel = pythreejs.Object3DModel.extend({
     set_limits: function(limits) {
         _.mapObject(limits, function(value, key) {
             this.material.uniforms[key].value = value
-        }, this)
-    },
-    add_to_scene: function() {
-        _.each(this.meshes, function(mesh) {
-            this.renderer.scene_scatter.add(mesh)
-        }, this)
-    },
-    remove_from_scene: function() {
-        _.each(this.meshes, function(mesh) {
-            this.renderer.scene_scatter.remove(mesh)
-            mesh.geometry.dispose()
         }, this)
     },
     on_change: function(attribute) {
@@ -146,8 +139,7 @@ var MeshModel = pythreejs.Object3DModel.extend({
     update_: function() {
         this.remove_from_scene()
         this.create_mesh()
-        this.add_to_scene()
-        this.renderer.update()
+        this.trigger('need_render');
     },
     _get_value: function(value, index, default_value) {
         var default_value = default_value;
@@ -239,8 +231,12 @@ var MeshModel = pythreejs.Object3DModel.extend({
         console.log(this.previous_values)
         console.log("attributes changed: ")
         console.log(this.attributes_changed)*/
-        this.meshes = []
         var sequence_index_original, sequence_index_previous_original;
+        if(this.obj.children.length > 0){
+            _.each(this.obj.children, child => {
+                this.obj.remove(child);
+            },this)
+        }
 
         var sequence_index = sequence_index_original = this.get("sequence_index");
         var sequence_index_previous = sequence_index_previous_original = sequence_index;
@@ -360,7 +356,7 @@ var MeshModel = pythreejs.Object3DModel.extend({
             this.surface_mesh.frustumCulled = false;
             this.surface_mesh.material_rgb = this.material_rgb;
             this.surface_mesh.material_normal = this.material;
-            this.meshes.push(this.surface_mesh);
+            this.obj.add(this.surface_mesh);
         }
 
         var lines = this.get('lines');
@@ -383,7 +379,7 @@ var MeshModel = pythreejs.Object3DModel.extend({
             //TODO: check lines with volume rendering, also in scatter
             this.line_segments.material_rgb = this.line_material_rgb;
             this.line_segments.material_normal = this.line_material;
-            this.meshes.push(this.line_segments);
+            this.obj.add(this.line_segments);
         } else {
             this.line_segments = null;
         }
@@ -399,9 +395,11 @@ var MeshModel = pythreejs.Object3DModel.extend({
             }
             // uniforms of material_rgb has a reference to these same object
             //this.renderer.transition(this.material.uniforms[property], "value", done, this)
-            this.renderer.transition(function(value) {
-                this.material.uniforms[property]['value'] = time_offset + time_delta * value;
-            }, done, this);
+            if(renderer != null){
+                this.renderer.transition(function(value) {
+                    this.material.uniforms[property]['value'] = time_offset + time_delta * value;
+                }, done, this);
+            }  
         }, this)
         this.attributes_changed = {};
     },

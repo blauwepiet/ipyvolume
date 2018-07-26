@@ -3,21 +3,31 @@ var widgets = require('@jupyter-widgets/base');
 var THREE = require('three')
 var serialize = require('./serialize.js')
 var semver_range = require('./utils.js').semver_range;
+var pythreejs = require('jupyter-threejs');
 
 var shaders = {}
 
 shaders["box_fragment"] = require('raw-loader!../glsl/box-fragment.glsl');
 shaders["box_vertex"] = require('raw-loader!../glsl/box-vertex.glsl');
 
-var VolumeView = widgets.WidgetView.extend( {
-    render: function() {
-        this.renderer = this.options.parent;
+var VolumeModel = pythreejs.Object3DModel.extend({
+    initialize: function() {
+        pythreejs.Object3DModel.prototype.initialize.apply(this, arguments);
+        this.initPromise.bind(this).then(this.initialize_volume_model);
+    },
+    initialize_volume_model: function(){
         this.attributes_changed = {}
         this.data = []
 
         window.last_volume_view = this;
 
-        var render_size = this.renderer.getRenderSize()
+        var render_size = [400,400]
+
+        if(this.obj.children.length > 0){
+            _.each(this.obj.children, child => {
+                this.obj.remove(child);
+            },this)
+        }
 
         this.vol_box_geo = new THREE.BoxBufferGeometry(1, 1, 1);
         //this.box_material = new THREE.MeshLambertMaterial({color: 0xCC0000});
@@ -34,10 +44,11 @@ var VolumeView = widgets.WidgetView.extend( {
         //this.vol_box_mesh.position.z = -5;
         this.vol_box_mesh.updateMatrix()
         this.vol_box_mesh.matrixAutoUpdate = true
+        this.obj.add(this.vol_box_mesh);
 
         this.texture_loader = new THREE.TextureLoader()
 
-        this.texture_tf = null;//new THREE.DataTexture(null, this.model.get("tf").get("rgba").length, 1, THREE.RGBAFormat, THREE.UnsignedByteType)
+        this.texture_tf = null;//new THREE.DataTexture(null, this.get("tf").get("rgba").length, 1, THREE.RGBAFormat, THREE.UnsignedByteType)
 
         this.uniform_volumes_values = {}
         this.uniform_data = {type: 'tv', value: []}
@@ -60,92 +71,90 @@ var VolumeView = widgets.WidgetView.extend( {
         this.data_set()
         var update_rendering_method = () => {
             this.renderer.rebuild_multivolume_rendering_material()
-            this.renderer.update()
+            this.trigger('need_render');
         }
-        this.model.on('change:rendering_method', update_rendering_method)
+        this.on('change:rendering_method', update_rendering_method)
         //this.model.on('change:rendering_method change:rendering_lighting', update_volr_defines)
         update_rendering_method()
 
 
-        this.add_to_scene()
-
-        this.model.on('change:data', this.data_set, this);
+        this.on('change:data', this.data_set, this);
 
         var update_minmax = () => {
-            this.uniform_volumes_values.data_range = [this.model.get('data_min'), this.model.get('data_max')]
-            this.uniform_volumes_values.show_range = [this.model.get('show_min'), this.model.get('show_max')]
+            this.uniform_volumes_values.data_range = [this.get('data_min'), this.get('data_max')]
+            this.uniform_volumes_values.show_range = [this.get('show_min'), this.get('show_max')]
             this.renderer.rebuild_multivolume_rendering_material()
-            this.renderer.update()
+            this.trigger('need_render');
         }
-        this.model.on('change:data_min change:data_max change:show_min change:show_max', update_minmax, this);
+        this.on('change:data_min change:data_max change:show_min change:show_max', update_minmax, this);
         update_minmax()
 
         var update_clamp = () => {
-            this.uniform_volumes_values.clamp_min = this.model.get('clamp_min')
-            this.uniform_volumes_values.clamp_max = this.model.get('clamp_max')
+            this.uniform_volumes_values.clamp_min = this.get('clamp_min')
+            this.uniform_volumes_values.clamp_max = this.get('clamp_max')
             this.renderer.rebuild_multivolume_rendering_material()
-            this.renderer.update()
+            this.trigger('need_render');
         }
-        this.model.on('change:clamp_min change:clamp_max', update_clamp, this);
+        this.on('change:clamp_min change:clamp_max', update_clamp, this);
         update_clamp()
 
         var update_opacity_scale = () => {
-            this.uniform_volumes_values.opacity_scale = this.model.get('opacity_scale')
+            this.uniform_volumes_values.opacity_scale = this.get('opacity_scale')
             this.renderer.rebuild_multivolume_rendering_material()
-            this.renderer.update()
+            this.trigger('need_render');
         }
         update_opacity_scale()
-        this.model.on('change:opacity_scale', update_opacity_scale)
+        this.on('change:opacity_scale', update_opacity_scale)
 
         var update_lighting = () => {
-            this.uniform_volumes_values.lighting = this.model.get('lighting')
+            this.uniform_volumes_values.lighting = this.get('lighting')
             this.renderer.rebuild_multivolume_rendering_material()
-            this.renderer.update()
+            this.trigger('need_render');
         }
         update_lighting()
-        this.model.on('change:lighting', update_lighting)
+        this.on('change:lighting', update_lighting)
 
         var update_ray_steps = () => {
             this.renderer.rebuild_multivolume_rendering_material()
-            this.renderer.update()
+            this.trigger('need_render');
         }
         update_ray_steps()
-        this.model.on('change:ray_steps', update_ray_steps)
+        this.on('change:ray_steps', update_ray_steps)
 
 
         var update_brightness = () => {
-            this.uniform_volumes_values.brightness = this.model.get('brightness')
+            this.uniform_volumes_values.brightness = this.get('brightness')
             this.renderer.rebuild_multivolume_rendering_material()
-            this.renderer.update()
+            this.trigger('need_render');
         }
         update_brightness()
-        this.model.on('change:brightness', update_brightness)
+        this.on('change:brightness', update_brightness)
 
-        this.model.on('change:tf', this.tf_set, this)
+        this.on('change:tf', this.tf_set, this)
 
-        this.model.on('change:extent', () => {
+        this.on('change:extent', () => {
             this.renderer.rebuild_multivolume_rendering_material()
-            this.renderer.update()
+            this.trigger('need_render');
         })
 
         window.last_volume = this; // for debugging purposes
 
     },
     get_ray_steps: function() {
-        var ray_steps = this.model.get('ray_steps');
+        var ray_steps = this.get('ray_steps');
         if(ray_steps == null) {
             ray_steps = _.max(this.data_shape)
         }
         return ray_steps;
     },
     is_max_intensity() {
-        return this.model.get('rendering_method') == 'MAX_INTENSITY';
+        return this.get('rendering_method') == 'MAX_INTENSITY';
     },
     is_normal() {
-        return this.model.get('rendering_method') == 'NORMAL';
+        return this.get('rendering_method') == 'NORMAL';
     },
     data_set: function() {
-        this.volume = this.model.get("data")
+        this.volume = this.get("data")
         var data = new Uint8Array(this.volume.tiles.buffer)
         this.texture_volume = new THREE.DataTexture(data, this.volume.image_shape[0], this.volume.image_shape[1],
                                                     THREE.RGBAFormat, THREE.UnsignedByteType)
@@ -158,22 +167,22 @@ var VolumeView = widgets.WidgetView.extend( {
         this.uniform_volumes_values.slice_size = this.volume.slice_shape
         this.uniform_data.value = [this.texture_volume]
         this.uniform_data.value = [this.texture_volume]
-        this.uniform_volumes_values.data_range = [this.model.get('data_min'), this.model.get('data_max')]
-        this.uniform_volumes_values.show_range = [this.model.get('show_min'), this.model.get('show_max')]
+        this.uniform_volumes_values.data_range = [this.get('data_min'), this.get('data_max')]
+        this.uniform_volumes_values.show_range = [this.get('show_min'), this.get('show_max')]
         this.texture_volume.needsUpdate = true // without this it doesn't seem to work
         this.data_shape = [this.volume.slice_shape[0], this.volume.slice_shape[1], this.volume.slices]
         this.renderer.rebuild_multivolume_rendering_material()
-        this.renderer.update()
+        this.trigger('need_render');
     },
     tf_set: function() {
         // TODO: remove listeners from previous
-        if(this.model.get("tf")) {
-            this.model.get("tf").on('change:rgba', this.tf_changed, this);
+        if(this.get("tf")) {
+            this.get("tf").on('change:rgba', this.tf_changed, this);
             this.tf_changed()
         }
     },
     tf_changed: function() {
-        var tf = this.model.get("tf")
+        var tf = this.get("tf")
         if(tf) {
             /*if(!this.texture_tf) {
                 this.texture_tf = new THREE.DataTexture(tf.get_data_array(), tf.get("rgba").length, 1, THREE.RGBAFormat, THREE.UnsignedByteType)
@@ -183,11 +192,12 @@ var VolumeView = widgets.WidgetView.extend( {
             }*/
             this.texture_tf = new THREE.DataTexture(tf.get_data_array(), tf.get("rgba").shape[0], 1, THREE.RGBAFormat, THREE.UnsignedByteType)
             this.texture_tf.needsUpdate = true // without this it doesn't seem to work
+
             // this.box_material_volr.uniforms.transfer_function.value = [this.texture_tf]
             this.uniform_transfer_function.value = [this.texture_tf]
         }
         this.renderer.rebuild_multivolume_rendering_material()
-        this.renderer.update()
+        this.trigger('need_render');
     },
     set_limits: function(limits) {
         var xlim = limits.xlim;
@@ -234,21 +244,10 @@ var VolumeView = widgets.WidgetView.extend( {
         this.uniform_volumes_values.scale = [1/(x1n-x0n), 1/(y1n-y0n), 1/(z1n-z0n)]
         this.uniform_volumes_values.offset = [-x0n, -y0n, -z0n]
     },
-    add_to_scene: function() {
-        this.renderer.scene_volume.add(this.vol_box_mesh)
-    },
-    remove_from_scene: function() {
-        this.renderer.scene_volume.remove(this.vol_box_mesh)
-    },
-});
-
-var VolumeModel = widgets.WidgetModel.extend({
     defaults: function() {
-        return _.extend(widgets.WidgetModel.prototype.defaults(), {
+        return _.extend(pythreejs.Object3DModel.prototype.defaults(), {
             _model_name : 'VolumeModel',
-            _view_name : 'VolumeView',
             _model_module : 'ipyvolume',
-            _view_module : 'ipyvolume',
             _model_module_version: semver_range,
              _view_module_version: semver_range,
             sequence_index: 0,
@@ -272,12 +271,9 @@ var VolumeModel = widgets.WidgetModel.extend({
     serializers: _.extend({
         tf: { deserialize: widgets.unpack_models },
         data: { serialize: (x) => x}
-    }, widgets.DOMWidgetModel.serializers)
+    }, pythreejs.Object3DModel.serializers)
 });
 
-
-
 module.exports = {
-    VolumeView:VolumeView,
     VolumeModel:VolumeModel
 }

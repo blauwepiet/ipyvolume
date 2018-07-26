@@ -136,10 +136,8 @@ def gcf():
     :return: :any:`Figure`
     """
     if current.figure is None:
-        print('making new fig')
         return figure()
     else:
-        print('returning current vigure')
         return current.figure
 
 
@@ -256,7 +254,7 @@ def plot_trisurf(x, y, z, triangles=None, lines=None, color=default_color, u=Non
         lines = np.array(lines).astype(dtype=np.uint32)
     mesh = ipv.Mesh(x=x, y=y, z=z, triangles=triangles, lines=lines, color=color, u=u, v=v, texture=texture)
     _grow_limits(np.array(x).reshape(-1), np.array(y).reshape(-1), np.array(z).reshape(-1))
-    fig.meshes = fig.meshes + [mesh]
+    fig.object3D_models = fig.object3D_models + [mesh]
     return mesh
 
 
@@ -372,7 +370,7 @@ def plot_mesh(x, y, z, color=default_color, wireframe=True, surface=True, wrapx=
     mesh = ipv.Mesh(x=x, y=y, z=z, triangles=triangles if surface else None, color=color,
                        lines=lines if wireframe else None,
                        u=u, v=v, texture=texture)
-    fig.meshes = fig.meshes + [mesh]
+    fig.object3D_models = fig.object3D_models + [mesh]
     return mesh
 
 @_docsubst
@@ -393,7 +391,7 @@ def plot(x, y, z, color=default_color, **kwargs):
     kwargs = dict(defaults, **kwargs)
     s = ipv.Scatter(x=x, y=y, z=z, color=color, **kwargs)
     s.material.visible = False
-    fig.scatters = fig.scatters + [s]
+    fig.object3D_models = fig.object3D_models + [s]
     return s
 
 
@@ -422,7 +420,7 @@ def scatter(x, y, z, color=default_color, size=default_size,
     s = ipv.Scatter(x=x, y=y, z=z, color=color, size=size,
                     color_selected=color_selected, size_selected=size_selected,
                     geo=marker, selection=selection, **kwargs)
-    fig.scatters = fig.scatters + [s]
+    fig.object3D_models = fig.object3D_models + [s]
     return s
 
 @_docsubst
@@ -452,7 +450,7 @@ def quiver(x, y, z, u, v, w, size=default_size * 10,
     s = ipv.Scatter(x=x, y=y, z=z, vx=u, vy=v, vz=w, color=color, size=size,
                     color_selected=color_selected, size_selected=size_selected,
                     geo=marker, **kwargs)
-    fig.scatters = fig.scatters + [s]
+    fig.object3D_models = fig.object3D_models + [s]
     return s
 
 
@@ -715,7 +713,7 @@ def volshow(data, lighting=False, data_min=None, data_max=None,
         widgets_bottom = [ipywidgets.HBox([widget_opacity_scale, widget_brightness])]
         current.container.children += tuple(widgets_bottom, )
 
-    fig.volumes = fig.volumes + [vol]
+    fig.object3D_models = fig.object3D_models + [vol]
 
     return vol
 
@@ -1157,10 +1155,11 @@ def selector_default(output_widget=None):
                 if mode == "subtract":
                     mask = xmask & ~ymask
                     return np.where(ymask if x is None else mask)
-            for scatter in fig.scatters:
-                x, y = fig.project(scatter.x, scatter.y, scatter.z)
-                mask = inside(x, y)
-                scatter.selected = join(scatter.selected, np.where(mask), fig.selection_mode)
+            for object3D_model in fig.object3D_models:
+                if object3D_model._model_name == 'ScatterModel':
+                    x, y = fig.project(object3D_model.x, object3D_model.y, object3D_model.z)
+                    mask = inside(x, y)
+                    object3D_model.selected = join(object3D_model.selected, np.where(mask), fig.selection_mode)
     fig.on_selection(lasso)
 
 

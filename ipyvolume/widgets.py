@@ -63,9 +63,7 @@ class Mesh(pythreejs.Object3D):
         return pythreejs.ShaderMaterial()
 
 @widgets.register
-class Scatter(widgets.Widget):
-    _view_name = Unicode('ScatterView').tag(sync=True)
-    _view_module = Unicode('ipyvolume').tag(sync=True)
+class Scatter(pythreejs.Object3D):
     _model_name = Unicode('ScatterModel').tag(sync=True)
     _model_module = Unicode('ipyvolume').tag(sync=True)
     _view_module_version = Unicode(semver_range_frontend).tag(sync=True)
@@ -111,10 +109,8 @@ class Scatter(widgets.Widget):
         return pythreejs.ShaderMaterial()
 
 @widgets.register
-class Volume(widgets.Widget):
+class Volume(pythreejs.Object3D):
     """Widget class representing a volume (rendering) using three.js"""
-    _view_name = Unicode('VolumeView').tag(sync=True)
-    _view_module = Unicode('ipyvolume').tag(sync=True)
     _model_name = Unicode('VolumeModel').tag(sync=True)
     _model_module = Unicode('ipyvolume').tag(sync=True)
     _view_module_version = Unicode(semver_range_frontend).tag(sync=True)
@@ -188,9 +184,9 @@ class Figure(ipywebrtc.MediaStream):
 
     eye_separation = traitlets.CFloat(6.4).tag(sync=True)
 
-    scatters = traitlets.List(traitlets.Instance(Scatter), [], allow_none=False).tag(sync=True, **ipywidgets.widget_serialization)
-    meshes = traitlets.List(traitlets.Instance(Mesh), [], allow_none=False).tag(sync=True, **ipywidgets.widget_serialization)
-    volumes = traitlets.List(traitlets.Instance(Volume), [], allow_none=False).tag(sync=True, **ipywidgets.widget_serialization)
+    object3D_models = traitlets.List(traitlets.Union([traitlets.Instance(Mesh),
+                                                      traitlets.Instance(Scatter),
+                                                      traitlets.Instance(Volume)]), [], allow_none=False).tag(sync=True, **ipywidgets.widget_serialization)
 
     animation = traitlets.Float(1000.0).tag(sync=True)
     animation_exponent = traitlets.Float(1.0).tag(sync=True)

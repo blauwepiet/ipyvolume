@@ -5,17 +5,22 @@ var serialize = require('./serialize.js');
 import * as values from './values'
 var semver_range = require('./utils.js').semver_range;
 var cat_data = require("../data/cat.json");
+var pythreejs = require('jupyter-threejs');
 
-var ScatterView = widgets.WidgetView.extend( {
-    render: function() {
-        this.renderer = this.options.parent;
+var ScatterModel = pythreejs.Object3DModel.extend({
+    initialize: function() {
+        pythreejs.Object3DModel.prototype.initialize.apply(this, arguments);
+        this.initPromise.bind(this).then(this.initialize_scatter_model);
+    },
+    initialize_scatter_model: function() {
+        this.renderer = null;
         this.previous_values = {}
         this.attributes_changed = {}
         window.last_scatter = this;
 
         this.texture_loader = new THREE.TextureLoader()
         this.textures = null;
-        if(this.model.get('texture')) {
+        if(this.get('texture')) {
             this._load_textures()
         }
 
@@ -81,34 +86,36 @@ var ScatterView = widgets.WidgetView.extend( {
                 texture: { type: 't', value: null },
                 texture_previous: { type: 't', value: null },
             },
-        this.material = this.model.get('material').obj.clone()
-        this.material_rgb = this.model.get('material').obj.clone()
-        this.line_material = this.model.get('line_material').obj.clone()
-        this.line_material_rgb = this.model.get('line_material').obj.clone()
+        this.material = this.get('material').obj.clone()
+        this.material_rgb = this.get('material').obj.clone()
+        this.line_material = this.get('line_material').obj.clone()
+        this.line_material_rgb = this.get('line_material').obj.clone()
         this.materials = [this.material, this.material_rgb, this.line_material, this.line_material_rgb]
         this._update_materials()
-        this.model.get('material').on('change', () => {
+        this.get('material').on('change', () => {
             this._update_materials()
-            this.renderer.update()
+            this.trigger('need_render');
         })
-        this.model.get('line_material').on('change', () => {
+        this.get('line_material').on('change', () => {
             this._update_materials()
-            this.renderer.update()
+            this.trigger('need_render');
         })
 
         this.create_mesh()
-        this.add_to_scene()
-        this.model.on("change:size change:size_selected change:color change:color_selected change:sequence_index change:x change:y change:z change:selected change:vx change:vy change:vz",   this.on_change, this)
-        this.model.on("change:geo change:connected", this.update_, this)
-        this.model.on("change:texture", this._load_textures, this)
-        this.model.on("change:visible", this.update_visibility, this)
-        this.model.on("change:geo", () => {
+        this.on("change:size change:size_selected change:color change:color_selected change:sequence_index change:x change:y change:z change:selected change:vx change:vy change:vz",   this.on_change, this)
+        this.on("change:geo change:connected", this.update_, this)
+        this.on("change:texture", this._load_textures, this)
+        this.on("change:visible", this.update_visibility, this)
+        this.on("change:geo", () => {
             this._update_materials()
-            this.renderer.update()
+            this.trigger('need_render');
         })
     },
+    set_parent_renderer: function (renderer) {
+        this.renderer = renderer;
+    },
     _load_textures: function() {
-        var texture = this.model.get('texture');
+        var texture = this.get('texture');
         if(texture.stream) { // instanceof media.MediaStreamModel) {
             this.textures = null
             this.texture_video = document.createElement('video')
@@ -123,7 +130,7 @@ var ScatterView = widgets.WidgetView.extend( {
                 this.update_()
             }, this))
         } else {
-            this.textures = _.map(this.model.get('texture'), function(texture_url) {
+            this.textures = _.map(this.get('texture'), function(texture_url) {
                 return this.texture_loader.load(texture_url, _.bind(function(texture) {
                     texture.wrapS = THREE.RepeatWrapping;
                     texture.wrapT = THREE.RepeatWrapping;
@@ -134,33 +141,16 @@ var ScatterView = widgets.WidgetView.extend( {
     },
     update_visibility: function () {
         this._update_materials()
-        this.renderer.update()
+        this.trigger('need_render');
     },
     set_limits: function(limits) {
         _.mapObject(limits, function(value, key) {
             this.material.uniforms[key].value = value
         }, this)
     },
-    add_to_scene: function() {
-        this.renderer.scene_scatter.add(this.mesh)
-        if(this.line_segments) {
-            this.renderer.scene_scatter.add(this.line_segments)
-        }
-    },
-    remove_from_scene: function() {
-        if(this.renderer.scene_scatter.children.indexOf(this.mesh) == -1) {
-            console.warn('trying to removing scatter mesh from scene that does not include it');
-        }
-        this.renderer.scene_scatter.remove(this.mesh)
-        this.mesh.geometry.dispose()
-        if(this.line_segments) {
-            this.renderer.scene_scatter.remove(this.line_segments)
-            this.line_segments.geometry.dispose()
-        }
-    },
     on_change: function(attribute) {
-        _.mapObject(this.model.changedAttributes(), function(val, key){
-            this.previous_values[key] = this.model.previous(key)
+        _.mapObject(this.changedAttributes(), function(val, key){
+            this.previous_values[key] = this.previous(key)
             // attributes_changed keys will say what needs to be animated, it's values are the properties in
             // this.previous_values that need to be removed when the animation is done
             // we treat changes in _selected attributes the same
@@ -168,15 +158,15 @@ var ScatterView = widgets.WidgetView.extend( {
             if (key_animation == "sequence_index") {
                 var animated_by_sequence = ['x', 'y', 'z', 'vx', 'vy', 'vz', 'size', 'color']
                 _.each(animated_by_sequence, function(name) {
-                    if(_.isArray(this.model.get(name))) {
+                    if(_.isArray(this.get(name))) {
                         this.attributes_changed[name] = [name, 'sequence_index']
                     }
                 }, this)
             }
-    	    else if(key_animation == "geo") {
+            else if(key_animation == "geo") {
                 // direct change, no animation
             }
-	        else if(key_animation == "selected") { // and no explicit animation on this one
+            else if(key_animation == "selected") { // and no explicit animation on this one
                 this.attributes_changed["color"] = [key]
                 this.attributes_changed["size"] = []
             } else {
@@ -194,8 +184,7 @@ var ScatterView = widgets.WidgetView.extend( {
     update_: function() {
         this.remove_from_scene()
         this.create_mesh()
-        this.add_to_scene()
-        this.renderer.update()
+        this.trigger('need_render');
     },
     _get_value: function(value, index, default_value) {
         var default_value = default_value;
@@ -208,10 +197,10 @@ var ScatterView = widgets.WidgetView.extend( {
             return value
     },
     get_current: function(name, index, default_value) {
-        return this._get_value(this.model.get(name), index, default_value)
+        return this._get_value(this.get(name), index, default_value)
     },
     get_previous: function(name, index, default_value) {
-        return this._get_value(this.previous_values[name] || this.model.get(name), index, default_value)
+        return this._get_value(this.previous_values[name] || this.get(name), index, default_value)
     },
     _get_value_vec3: function(value, index, default_value) {
         var default_value = default_value;
@@ -223,28 +212,28 @@ var ScatterView = widgets.WidgetView.extend( {
             return value
     },
     get_current_vec3: function(name, index, default_value) {
-        return this._get_value_vec3(this.model.get(name), index, default_value)
+        return this._get_value_vec3(this.get(name), index, default_value)
     },
     get_previous_vec3: function(name, index, default_value) {
-        return this._get_value_vec3(this.previous_values[name] || this.model.get(name), index, default_value)
+        return this._get_value_vec3(this.previous_values[name] || this.get(name), index, default_value)
     },
     _update_materials: function() {
-        this.material.copy(this.model.get('material').obj)
-        this.material_rgb.copy(this.model.get('material').obj)
-        this.line_material.copy(this.model.get('line_material').obj)
+        this.material.copy(this.get('material').obj)
+        this.material_rgb.copy(this.get('material').obj)
+        this.line_material.copy(this.get('line_material').obj)
         // not present on .copy.. bug?
-        this.line_material_rgb.copy(this.model.get('line_material').obj)
-        this.line_material_rgb.linewidth = this.line_material.linewidth = this.model.get('line_material').obj.linewidth
+        this.line_material_rgb.copy(this.get('line_material').obj)
+        this.line_material_rgb.linewidth = this.line_material.linewidth = this.get('line_material').obj.linewidth
         this.material.extensions = {derivatives: true}
         this.material_rgb.defines = {USE_RGB: true}
         this.material_rgb.extensions = {derivatives: true}
         this.line_material.defines = {AS_LINE: true}
         this.line_material_rgb.defines = {USE_RGB: true, AS_LINE: true}
         // locally and the visible with this object's visible trait
-        this.material.visible = this.material.visible && this.model.get('visible');
-        this.material_rgb.visible = this.material.visible && this.model.get('visible');
-        this.line_material.visible = this.line_material.visible && this.model.get('visible');
-        this.line_material_rgb.visible = this.line_material.visible && this.model.get('visible');
+        this.material.visible = this.material.visible && this.get('visible');
+        this.material_rgb.visible = this.material.visible && this.get('visible');
+        this.line_material.visible = this.line_material.visible && this.get('visible');
+        this.line_material_rgb.visible = this.line_material.visible && this.get('visible');
         this.materials.forEach((material) => {
             material.vertexShader = require('raw-loader!../glsl/scatter-vertex.glsl');
             material.fragmentShader = require('raw-loader!../glsl/scatter-fragment.glsl');
@@ -254,14 +243,14 @@ var ScatterView = widgets.WidgetView.extend( {
             material.depthTest = true;
             material.needsUpdate = true;
         })
-        var geo = this.model.get("geo")
+        var geo = this.get("geo")
         var sprite = geo.endsWith('2d');
         if(sprite) {
             this.material.defines['USE_SPRITE'] = true;
             this.material_rgb.defines['USE_SPRITE'] = true;
         }
         if (sprite){
-            var texture = this.model.get('texture');
+            var texture = this.get('texture');
             if(texture && this.textures) {
                 this.material.defines['USE_TEXTURE'] = true;
             }
@@ -272,7 +261,14 @@ var ScatterView = widgets.WidgetView.extend( {
         this.line_material_rgb.needsUpdate = true;
     },
     create_mesh: function() {
-        var geo = this.model.get("geo")
+
+        if(this.obj.children.length > 0){
+            _.each(this.obj.children, child => {
+                this.obj.remove(child);
+            },this)
+        }
+
+        var geo = this.get("geo")
         //console.log(geo)
         if(!geo)
             geo = "diamond"
@@ -283,7 +279,7 @@ var ScatterView = widgets.WidgetView.extend( {
         var vertices = buffer_geo.attributes.position.clone();
         instanced_geo.addAttribute('position', vertices);
 
-        var sequence_index = this.model.get("sequence_index");
+        var sequence_index = this.get("sequence_index");
         var sequence_index_previous = this.previous_values["sequence_index"]
         if(typeof sequence_index_previous == "undefined")
             sequence_index_previous = sequence_index;
@@ -303,7 +299,7 @@ var ScatterView = widgets.WidgetView.extend( {
         previous.trim(previous.length)
         var previous_length = previous.length;
         var current_length = current.length;
-        if(this.model.get("selected") || this.previous_values["selected"]) {
+        if(this.get("selected") || this.previous_values["selected"]) {
             // upgrade size and size_previous to an array if they were not already
             current.ensure_array(['size', 'size_selected', 'color', 'color_selected'])
             previous.ensure_array(['size', 'size_selected', 'color', 'color_selected'])
@@ -336,19 +332,19 @@ var ScatterView = widgets.WidgetView.extend( {
         current.add_attributes(instanced_geo)
         previous.add_attributes(instanced_geo, '_previous')
         if (sprite){
-            var texture = this.model.get('texture');
+            var texture = this.get('texture');
             if(texture && this.textures) {
                 // TODO: this should prolly go into _update_materiuals
                 this.material.uniforms['texture'].value = this.textures[sequence_index % this.textures.length]; // TODO/BUG: there could
                 this.material.uniforms['texture_previous'].value = this.textures[sequence_index_previous % this.textures.length];
             }
         }
-	    this.mesh = new THREE.Mesh(instanced_geo, this.material);
-	    this.mesh.material_rgb = this.material_rgb
-	    this.mesh.material_normal = this.material
+        this.mesh = new THREE.Mesh(instanced_geo, this.material);
+        this.mesh.material_rgb = this.material_rgb
+        this.mesh.material_normal = this.material
+        this.obj.add(mesh)
 
-
-        if(this.model.get('connected')) {
+        if(this.get('connected')) {
             var geometry = new THREE.BufferGeometry();
 
             current.merge_to_vec3(['x', 'y', 'z'], 'vertices')
@@ -363,6 +359,7 @@ var ScatterView = widgets.WidgetView.extend( {
             
             this.line_segments = new THREE.Line(geometry, this.line_material);
             this.line_segments.frustumCulled = false;
+            this.obj.add(line_segments)
         } else {
             this.line_segments = null;
         }
@@ -379,19 +376,16 @@ var ScatterView = widgets.WidgetView.extend( {
             var set = function(value) {
                 this.material.uniforms[property]['value'] = value
             }
-            this.renderer.transition(set, done, this)
+            if(renderer != null){
+                this.renderer.transition(set, done, this)
+            }
         }, this)
         this.attributes_changed = {}
-    }
-});
-
-var ScatterModel = widgets.WidgetModel.extend({
+    },
     defaults: function() {
-        return _.extend(widgets.WidgetModel.prototype.defaults(), {
+        return _.extend(pythreejs.Object3DModel.prototype.defaults(), {
             _model_name : 'ScatterModel',
-            _view_name : 'ScatterView',
             _model_module : 'ipyvolume',
-            _view_module : 'ipyvolume',
             _model_module_version: semver_range,
              _view_module_version: semver_range,
             size: 5,
@@ -420,12 +414,11 @@ var ScatterModel = widgets.WidgetModel.extend({
         texture: serialize.texture,
         material: { deserialize: widgets.unpack_models },
         line_material: { deserialize: widgets.unpack_models },
-    }, widgets.WidgetModel.serializers)
+    }, pythreejs.Object3DModel.serializers)
 });
 
 
 
 module.exports = {
-    ScatterView:ScatterView,
     ScatterModel:ScatterModel
 }

@@ -619,17 +619,13 @@ var FigureView = widgets.DOMWidgetView.extend( {
         // the threejs animation system looks at the parent of the camera and sends rerender msg'es
         this.shared_scene.add(this.camera);
 
-        this.scene_scatter = new THREE.Scene();
-        //this.scene_scatter.add(this.camera);
+        this.scene_geometry = new THREE.Scene();
+        //this.scene_geometry.add(this.camera);
 
         this.scene_opaque = new THREE.Scene();
         //this.scene_opaque.add(this.camera);
         this.scene_opaque.add(this.wire_box)
         this.scene_opaque.add(this.axes)
-
-        
-        this.scatter_views = {};
-        this.volume_views = {};
 
         var render_width = width;
         var render_height = height;
@@ -749,14 +745,9 @@ var FigureView = widgets.DOMWidgetView.extend( {
             defines: {COORDINATE: true},
             side: THREE.FrontSide
         });
-
-
-        this.model.on('change:scatters', this.update_scatters, this)
-        this.update_scatters()
-        this.model.on('change:meshes', this.update_meshes, this)
-        this.update_meshes()
-        this.model.on('change:volumes', this.update_volumes, this)
-        this.update_volumes()
+        
+        this.model.on('change:object3D_models', this.update_object3d_widgets, this);
+        this.update_object3d_widgets();
 
 
         //this.volume_changed()
@@ -814,7 +805,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         var update_center = () => {
             // WARNING: we cheat a little by setting the scene positions (hence the minus) since it is
             // easier, might get us in trouble later?
-            _.each([this.scene_volume, this.scene_opaque, this.scene_scatter], scene => {
+            _.each([this.scene_volume, this.scene_opaque, this.scene_geometry], scene => {
                 var pos = this.model.get('camera_center');
                 scene.position.set(-pos[0], -pos[1], -pos[2])
             })
@@ -1272,68 +1263,21 @@ var FigureView = widgets.DOMWidgetView.extend( {
     _d3_remove_axis_tick: function(node, d, i) {
         d.object_ticklabel.parent.remove(d.object_ticklabel)
     },
-    update_scatters: function() {
-        var scatters = this.model.get('scatters'); // This is always a list?
-        if(scatters.length != 0) { // So now check if list has length 0
-            var current_sct_cids = []
-            // Add new scatter if not already as scatter view in figure
-            _.each(scatters, scatter_model => {
-                current_sct_cids.push(scatter_model.cid);
-                if(!(scatter_model.cid in this.scatter_views)){
-                    var options = {parent: this}
-                    var scatter_view = new scatter.ScatterView({options: options, model: scatter_model})
-                    scatter_view.render()    
-                    this.scatter_views[scatter_model.cid] = scatter_view
+    update_object3d_widgets: function() {
+        var object3D_models = this.model.get('object3D_models'); // This is always a list?
+        if(object3D_models.length != 0) { // So now check if list has length 0
+            _.each(object3D_models, object3D_model => {
+                if(object3D_model.renderer == null){
+                    object3D_model.renderer = this;
                 }
+                if(object3D_model.name == 'VolumeModel'){
+                    this.scene_volume.add(object3D_model.obj)
+                }
+                else{
+                    this.scene_geometry.add(object3D_model.obj)    
+                }
+                object3D_model.on('need_render',this.update,this);
             }, this)
-
-            // Remove old scatters not contained in scatters
-            _.each(this.scatter_views, (sct, cid) => {
-                if(current_sct_cids.indexOf(cid) == -1){
-                    sct.remove_from_scene();
-                    delete this.scatter_views[cid];
-                }
-            },this)
-        } else {
-            this.scatter_views = {}
-        }
-    },
-    update_meshes: function() {
-        var mesh_models = this.model.get('meshes'); // This is always a list?
-        if(mesh_models.length != 0) { // So now check if list has length 0
-            //var current_msh_cids = []
-            // Add new meshes if not already as mesh view in figure
-            _.each(mesh_models, mesh_model => {
-                if(mesh_model.renderer == null){
-                    mesh_model.init_object(this);
-                }
-            }, this)
-        }
-    },
-    update_volumes: function() {
-        var volumes = this.model.get('volumes'); // This is always a list?
-        if(volumes.length != 0) { // So now check if list has length 0
-            var current_vol_cids = []
-            // Add new volumes if not already as volume view in figure
-            _.each(volumes, vol_model => {
-                current_vol_cids.push(vol_model.cid);
-                if(!(vol_model.cid in this.volume_views)){
-                    var options = {parent: this}
-                    var volume_view = new volume.VolumeView({options: options, model: vol_model})
-                    this.volume_views[vol_model.cid] = volume_view
-                    volume_view.render()
-                }
-            }, this)
-
-            // Remove old meshes not contained in meshes
-            _.each(this.volume_views, (vol, cid) => {
-                if(current_vol_cids.indexOf(cid) == -1){
-                    vol.remove_from_scene();
-                    delete this.volume_views[cid];
-                }
-            },this)
-        } else {
-            this.volume_views = {}
         }
     },
     transition: function(f, on_done, context) {
@@ -1380,7 +1324,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         this.box_mesh.rotation.x = -(e.beta * Math.PI / 180 + Math.PI*2);
         this.box_mesh.rotation.y = -(e.gamma * Math.PI / 180 + Math.PI*2);*/
 
-        _.each([this.scene_volume, this.scene_opaque, this.scene_scatter], scene => {
+        _.each([this.scene_volume, this.scene_opaque, this.scene_geometry], scene => {
             scene.rotation.reorder( "XYZ" );
             scene.rotation.x = (e.gamma * Math.PI / 180 + Math.PI*2);
             scene.rotation.y = -(e.beta * Math.PI / 180 + Math.PI*2);
@@ -1627,15 +1571,12 @@ var FigureView = widgets.DOMWidgetView.extend( {
     },
     _render_eye: function(camera) {
         this.camera.updateMatrixWorld();
-        var has_volumes = this.model.get("volumes").length != 0;
+        var has_volumes = _.filter(this.model.get("object3D_models"), object3D_model => { return object3D_model.name == 'VolumeModel'; }, this).length != 0;
         var panorama = this.model.get('panorama_mode') != 'no';
 
         // set material to rgb
-        _.each(this.scatter_views, scatter => {
-            scatter.set_limits(_.pick(this.model.attributes, 'xlim', 'ylim', 'zlim'))
-        }, this)
-        _.each(this.model.get('meshes'), mesh_model => {
-            mesh_model.set_limits(_.pick(this.model.attributes, 'xlim', 'ylim', 'zlim'))
+        _.each(this.model.get('object3D_models'), object3d_model => {
+            if(object3d_model.name != 'VolumeModel') object3d_model.set_limits(_.pick(this.model.attributes, 'xlim', 'ylim', 'zlim'))
         }, this)
 
         if(panorama) {
@@ -1664,7 +1605,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
             // this.cube_camera.matrixAutoUpdate = false;
 
             // this.cube_camera.matrixWorld.copy(camera.matrixWorld)
-            this.cube_camera.update(this.renderer, this.scene_scatter)
+            this.cube_camera.update(this.renderer, this.scene_geometry)
             this.cube_camera.update(this.renderer, this.scene_opaque)
             this.screen_texture = this.cube_camera.renderTarget; //{Volume:this.volr_texture, Back:this.back_texture, Front:this.front_texture, Coordinate:this.coordinate_texture}[this.model.get("show")]
             //this.renderer.clearTarget(this.renderer, true, true, true)
@@ -1675,14 +1616,13 @@ var FigureView = widgets.DOMWidgetView.extend( {
 
         // render the back coordinates of the box
         if(has_volumes){
-            // to render the back sides of the boxes, we need to invert the z buffer value
-            // and invert the test
             this.renderer.state.buffers.depth.setClear(0);
-            _.each(this.volume_views, volume_view => {
-                volume_view.box_material.side = THREE.BackSide;
-                volume_view.box_material.depthFunc = THREE.GreaterDepth
-                volume_view.vol_box_mesh.material = volume_view.box_material;
-                volume_view.set_limits(_.pick(this.model.attributes, 'xlim', 'ylim', 'zlim'))
+            _.each(_.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }), 
+                            volume_model => {
+                volume_model.box_material.side = THREE.BackSide;
+                volume_model.box_material.depthFunc = THREE.GreaterDepth
+                volume_model.vol_box_mesh.material = volume_model.box_material;
+                volume_model.set_limits(_.pick(this.model.attributes, 'xlim', 'ylim', 'zlim'))
             },this)
             this.renderer.clearTarget(this.volume_back_target, true, true, true)
             this.renderer.render(this.scene_volume, camera, this.volume_back_target);
@@ -1691,7 +1631,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
             // Color and depth render pass for volume rendering
             this.renderer.autoClear = false;
             this.renderer.clearTarget(this.geometry_depth_target, true, true, true)
-            this.renderer.render(this.scene_scatter, camera, this.geometry_depth_target);
+            this.renderer.render(this.scene_geometry, camera, this.geometry_depth_target);
             this.renderer.render(this.scene_opaque, camera, this.geometry_depth_target);
             this.renderer.autoClear = true;
 
@@ -1700,7 +1640,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         // Normal color pass of geometry for final screen pass
         this.renderer.autoClear = false;
         this.renderer.clearTarget(this.color_pass_target, true, true, true)
-        this.renderer.render(this.scene_scatter, camera, this.color_pass_target);
+        this.renderer.render(this.scene_geometry, camera, this.color_pass_target);
         this.renderer.render(this.scene_opaque, camera, this.color_pass_target);
         this.renderer.autoClear = true;
 
@@ -1709,9 +1649,10 @@ var FigureView = widgets.DOMWidgetView.extend( {
             // so that once we render the box again, each fragment will be processed
             // once.
             this.renderer.context.colorMask(0, 0, 0, 0)
-            _.each(this.volume_views, volume_view => {
-                volume_view.box_material.side = THREE.FrontSide;
-                volume_view.box_material.depthFunc = THREE.LessEqualDepth
+            _.each(_.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }), 
+                    volume_model => {
+                volume_model.box_material.side = THREE.FrontSide;
+                volume_model.box_material.depthFunc = THREE.LessEqualDepth
             },this)
             this.renderer.autoClear = false;
             this.renderer.clearTarget(this.color_pass_target, false, true, false)
@@ -1732,11 +1673,8 @@ var FigureView = widgets.DOMWidgetView.extend( {
         }
 
         // set RGB material for coordinate texture render
-        _.each(this.scatter_views, scatter => {
-            scatter.mesh.material = scatter.mesh.material_rgb
-        }, this)
-        _.each(this.model.get('meshes'), mesh_view => {
-            _.each(mesh_view.meshes, mesh => {
+        _.each(this.model.get('object3D_models'), objec3D_model => {
+            _.each(objec3D_model.obj.children, mesh => {
                 mesh.material = mesh.material_rgb
             }, this);
         }, this)
@@ -1745,7 +1683,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         this.renderer.autoClear = false;
         this.renderer.setClearAlpha(0)
         this.renderer.clearTarget(this.coordinate_texture, true, true, true)
-        this.renderer.render(this.scene_scatter, camera, this.coordinate_texture);
+        this.renderer.render(this.scene_geometry, camera, this.coordinate_texture);
         this.renderer.autoClear = true;
 
         // now we render the weighted coordinate for the volumetric data
@@ -1755,10 +1693,12 @@ var FigureView = widgets.DOMWidgetView.extend( {
             // TODO: this render pass is only needed when the coordinate is required
             // we slow down by a factor of 2 by always doing this
             this.renderer.context.colorMask(0, 0, 0, 0)
-            _.each(this.volume_views, volume_view => {
-                volume_view.box_material.side = THREE.FrontSide;
-                volume_view.box_material.depthFunc = THREE.LessEqualDepth
+            _.each(_.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }), 
+                    volume_model => {
+                volume_model.box_material.side = THREE.FrontSide;
+                volume_model.box_material.depthFunc = THREE.LessEqualDepth
             },this)
+
             this.renderer.autoClear = false;
             this.renderer.clearTarget(this.color_pass_target, false, true, false)
             this.renderer.render(this.scene_volume, camera, this.color_pass_target);
@@ -1766,9 +1706,10 @@ var FigureView = widgets.DOMWidgetView.extend( {
             this.renderer.context.colorMask(true, true, true, true)
 
             // TODO: if volume perfectly overlap, we render it twice, use polygonoffset and LESS z test?
-            _.each(this.volume_views, volume_view => {
-                volume_view.vol_box_mesh.material = this.material_multivolume_depth;
-                // volume_view.set_geometry_depth_tex(this.geometry_depth_target.depthTexture)
+            _.each(_.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }), 
+                    volume_model => {
+                // volume_model.set_geometry_depth_tex(this.geometry_depth_target.depthTexture)
+                volume_model.vol_box_mesh.material = this.material_multivolume_depth;
             },this)
             this.renderer.autoClear = false;
             // we want to keep the colors and z-buffer as they are
@@ -1779,23 +1720,20 @@ var FigureView = widgets.DOMWidgetView.extend( {
         }
 
         // restore materials
-        _.each(this.scatter_views, scatter => {
-            scatter.mesh.material = scatter.mesh.material_normal
-        }, this)
-        _.each(this.model.get('meshes'), mesh_view => {
-            _.each(mesh_view.meshes, mesh => {
+        _.each(this.model.get('object3D_models'), object3D_model => {
+            _.each(object3D_model.obj.children, mesh => {
                 mesh.material = mesh.material_normal
             }, this);
         }, this)
 
         // render to screen
         this.screen_texture = {Volume:this.color_pass_target.texture, Back:this.volume_back_target.texture, Geometry_back:this.geometry_depth_target.depthTexture, Coordinate:this.coordinate_texture.texture}[this.model.get("show")]
-        this.screen_material.uniforms.tex.value = this.screen_texture.texture
+        this.screen_material.uniforms.tex.value = this.screen_texture
         //this.renderer.clearTarget(this.renderer, true, true, true)
         this.renderer.render(this.screen_scene, this.screen_camera);
     },
     rebuild_multivolume_rendering_material: function() {
-        var volumes = this.model.get('volumes'); // This is always a list?
+        var volumes = _.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }) // This is always a list?
         if(volumes.length == 0)
             return;
 
@@ -1810,25 +1748,22 @@ var FigureView = widgets.DOMWidgetView.extend( {
         material.uniforms.transfer_function.value         = []
         material.uniforms.transfer_function_max_int.value = []
         material.uniforms.steps.value = _.max(volumes.map(volume => {
-            let volume_view = this.volume_views[volume.cid];
-            return volume_view ? volume_view.get_ray_steps() : 0;
+            return volume ? volume.get_ray_steps() : 0;
         }))
 
         _.each(volumes, vol_model => {
-            let volume_view = this.volume_views[vol_model.cid];
             // could be that the view was not yet created
-            if(volume_view) {
-                var volume = volume_view.model;
-                if(volume_view.is_normal()) {
+            if(vol_model) {
+                if(vol_model.is_normal()) {
                     count_normal++;
-                    material.uniforms.volumes.value.push(volume_view.uniform_volumes_values)
-                    material.uniforms.data.value.push(volume_view.uniform_data.value[0])
-                    material.uniforms.transfer_function.value.push(volume_view.uniform_transfer_function.value[0])
+                    material.uniforms.volumes.value.push(vol_model.uniform_volumes_values)
+                    material.uniforms.data.value.push(vol_model.uniform_data.value[0])
+                    material.uniforms.transfer_function.value.push(vol_model.uniform_transfer_function.value[0])
                 } else {
                     count_max_int++;
-                    material.uniforms.volumes_max_int.value.push(volume_view.uniform_volumes_values)
-                    material.uniforms.data_max_int.value.push(volume_view.uniform_data.value[0])
-                    material.uniforms.transfer_function_max_int.value.push(volume_view.uniform_transfer_function.value[0])
+                    material.uniforms.volumes_max_int.value.push(vol_model.uniform_volumes_values)
+                    material.uniforms.data_max_int.value.push(vol_model.uniform_data.value[0])
+                    material.uniforms.transfer_function_max_int.value.push(vol_model.uniform_transfer_function.value[0])
                 }
             }
         })
@@ -1876,7 +1811,8 @@ var FigureView = widgets.DOMWidgetView.extend( {
         var render_height = height;
         var display_width = width * this.model.get('displayscale')
         var display_height = height * this.model.get('displayscale')
-        if(this.is_fullscreen() && this.model.get("volumes") != 0) {
+
+        if(this.is_fullscreen() && _.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }).length != 0) {
             // fullscreen volume rendering is slow, respect width and height
             render_width = custom_width || this.model.get("width");
             render_height = custom_height || this.model.get("height");
@@ -1913,6 +1849,10 @@ var FigureView = widgets.DOMWidgetView.extend( {
         //
         
         this.material_multivolume.uniforms.render_size.value = [render_width, render_height]
+        _.each(_.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }), 
+                volume_model => {
+            volume_model.set_render_size(render_width, render_height);
+        })
 
         this.volume_back_target.setSize(render_width, render_height);
         this.geometry_depth_target.setSize(render_width, render_height);
@@ -1958,9 +1898,7 @@ var FigureModel = widgets.DOMWidgetModel.extend({
             height: 400,
             downscale: 1,
             displayscale: 1,
-            scatters: null,
-            meshes: null,
-            volumes: null,
+            object3D_models: null,
             show: 'Volume',
             xlim: [0., 1.],
             ylim: [0., 1.],
@@ -1983,9 +1921,7 @@ var FigureModel = widgets.DOMWidgetModel.extend({
 }, {
     serializers: _.extend({
 
-        scatters: { deserialize: widgets.unpack_models },
-        meshes: { deserialize: widgets.unpack_models },
-        volumes: { deserialize: widgets.unpack_models },
+        object3D_models: { deserialize: widgets.unpack_models },
         camera: { deserialize: widgets.unpack_models },
         scene: { deserialize: widgets.unpack_models },
     }, widgets.DOMWidgetModel.serializers)
