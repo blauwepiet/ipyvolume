@@ -184,9 +184,7 @@ class Figure(ipywebrtc.MediaStream):
 
     eye_separation = traitlets.CFloat(6.4).tag(sync=True)
 
-    object3D_models = traitlets.List(traitlets.Union([traitlets.Instance(Mesh),
-                                                      traitlets.Instance(Scatter),
-                                                      traitlets.Instance(Volume)]), [], allow_none=False).tag(sync=True, **ipywidgets.widget_serialization)
+    object3D_models = traitlets.List(traitlets.Instance(pythreejs.Object3D), [], allow_none=False).tag(sync=True, **ipywidgets.widget_serialization)
 
     animation = traitlets.Float(1000.0).tag(sync=True)
     animation_exponent = traitlets.Float(1.0).tag(sync=True)
