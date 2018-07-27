@@ -342,7 +342,7 @@ var ScatterModel = pythreejs.Object3DModel.extend({
         this.mesh = new THREE.Mesh(instanced_geo, this.material);
         this.mesh.material_rgb = this.material_rgb
         this.mesh.material_normal = this.material
-        this.obj.add(mesh)
+        this.obj.add(this.mesh)
 
         if(this.get('connected')) {
             var geometry = new THREE.BufferGeometry();
