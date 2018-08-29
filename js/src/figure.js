@@ -1272,6 +1272,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
                 }
                 if(object3D_model.name == 'VolumeModel'){
                     this.scene_volume.add(object3D_model.obj)
+                    object3D_model.on('need_multivolume_material_update', this.rebuild_multivolume_rendering_material, this);
                 }
                 else{
                     this.scene_geometry.add(object3D_model.obj)    
@@ -1618,6 +1619,8 @@ var FigureView = widgets.DOMWidgetView.extend( {
 
         // render the back coordinates of the box
         if(has_volumes){
+            // to render the back sides of the boxes, we need to invert the z buffer value
+            // and invert the test
             this.renderer.state.buffers.depth.setClear(0);
             _.each(volume_models, volume_model => {
                 volume_model.box_material.side = THREE.BackSide;
@@ -1661,9 +1664,9 @@ var FigureView = widgets.DOMWidgetView.extend( {
             this.renderer.context.colorMask(true, true, true, true)
 
             // TODO: if volume perfectly overlap, we render it twice, use polygonoffset and LESS z test?
-            _.each(this.volume_views, volume_view => {
-                volume_view.vol_box_mesh.material = this.material_multivolume;
-                // volume_view.set_geometry_depth_tex(this.geometry_depth_target.depthTexture)
+            _.each(this.volume_models, volume_model => {
+                volume_model.vol_box_mesh.material = this.material_multivolume;
+                // volume_model.set_geometry_depth_tex(this.geometry_depth_target.depthTexture)
             },this)
             this.renderer.autoClear = false;
             // we want to keep the colors and z-buffer as they are
@@ -1693,8 +1696,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
             // TODO: this render pass is only needed when the coordinate is required
             // we slow down by a factor of 2 by always doing this
             this.renderer.context.colorMask(0, 0, 0, 0)
-            _.each(_.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }), 
-                    volume_model => {
+            _.each(volume_models, volume_model => {
                 volume_model.box_material.side = THREE.FrontSide;
                 volume_model.box_material.depthFunc = THREE.LessEqualDepth
             },this)
@@ -1707,8 +1709,8 @@ var FigureView = widgets.DOMWidgetView.extend( {
 
             // TODO: if volume perfectly overlap, we render it twice, use polygonoffset and LESS z test?
             _.each(volume_models, volume_model => {
-                // volume_model.set_geometry_depth_tex(this.geometry_depth_target.depthTexture)
                 volume_model.vol_box_mesh.material = this.material_multivolume_depth;
+                // volume_model.set_geometry_depth_tex(this.geometry_depth_target.depthTexture)
             },this)
             this.renderer.autoClear = false;
             // we want to keep the colors and z-buffer as they are
@@ -1726,8 +1728,8 @@ var FigureView = widgets.DOMWidgetView.extend( {
         }, this)
 
         // render to screen
-        this.screen_texture = {Volume:this.color_pass_target.texture, Back:this.volume_back_target.texture, Geometry_back:this.geometry_depth_target.depthTexture, Coordinate:this.coordinate_texture.texture}[this.model.get("show")]
-        this.screen_material.uniforms.tex.value = this.screen_texture
+        this.screen_texture = {Volume:this.color_pass_target, Back:this.volume_back_target, Geometry_back:this.geometry_depth_target, Coordinate:this.coordinate_texture}[this.model.get("show")]
+        this.screen_material.uniforms.tex.value = this.screen_texture.texture
         //this.renderer.clearTarget(this.renderer, true, true, true)
         this.renderer.render(this.screen_scene, this.screen_camera);
     },
@@ -1747,23 +1749,20 @@ var FigureView = widgets.DOMWidgetView.extend( {
         material.uniforms.transfer_function.value         = []
         material.uniforms.transfer_function_max_int.value = []
         material.uniforms.steps.value = _.max(volumes.map(volume => {
-            return volume ? volume.get_ray_steps() : 0;
+            return volume.get_ray_steps();
         }))
 
         _.each(volumes, vol_model => {
-            // could be that the view was not yet created
-            if(vol_model) {
-                if(vol_model.is_normal()) {
-                    count_normal++;
-                    material.uniforms.volumes.value.push(vol_model.uniform_volumes_values)
-                    material.uniforms.data.value.push(vol_model.uniform_data.value[0])
-                    material.uniforms.transfer_function.value.push(vol_model.uniform_transfer_function.value[0])
-                } else {
-                    count_max_int++;
-                    material.uniforms.volumes_max_int.value.push(vol_model.uniform_volumes_values)
-                    material.uniforms.data_max_int.value.push(vol_model.uniform_data.value[0])
-                    material.uniforms.transfer_function_max_int.value.push(vol_model.uniform_transfer_function.value[0])
-                }
+            if(vol_model.is_normal()) {
+                count_normal++;
+                material.uniforms.volumes.value.push(vol_model.uniform_volumes_values)
+                material.uniforms.data.value.push(vol_model.uniform_data.value[0])
+                material.uniforms.transfer_function.value.push(vol_model.uniform_transfer_function.value[0])
+            } else {
+                count_max_int++;
+                material.uniforms.volumes_max_int.value.push(vol_model.uniform_volumes_values)
+                material.uniforms.data_max_int.value.push(vol_model.uniform_data.value[0])
+                material.uniforms.transfer_function_max_int.value.push(vol_model.uniform_transfer_function.value[0])
             }
         })
         material.defines.VOLUME_COUNT = count_normal;
@@ -1848,10 +1847,6 @@ var FigureView = widgets.DOMWidgetView.extend( {
         //
         
         this.material_multivolume.uniforms.render_size.value = [render_width, render_height]
-        _.each(_.filter(this.model.get('object3D_models'), object3D_model => { return object3D_model.name == 'VolumeModel'; }), 
-                volume_model => {
-            volume_model.set_render_size(render_width, render_height);
-        })
 
         this.volume_back_target.setSize(render_width, render_height);
         this.geometry_depth_target.setSize(render_width, render_height);

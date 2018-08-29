@@ -61,7 +61,7 @@ module.exports = [
         module: {
             rules: rules
         },
-        externals: ['three', 'jupyter-js-widgets', '@jupyter-widgets/base', '@jupyter-widgets/controls'],
+        externals: ['three', 'jupyter-threejs', 'jupyter-js-widgets', '@jupyter-widgets/base', '@jupyter-widgets/controls'],
         resolve: resolve
     },
     {// Embeddable ipyvolume bundle
@@ -93,7 +93,7 @@ module.exports = [
         module: {
             rules: rules
         },
-        externals: ['jupyter-js-widgets', '@jupyter-widgets/base', '@jupyter-widgets/controls'],
+        externals: ['jupyter-js-widgets', 'jupyter-threejs', '@jupyter-widgets/base', '@jupyter-widgets/controls'],
         resolve: resolve
     },
     {

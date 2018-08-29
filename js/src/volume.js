@@ -70,7 +70,7 @@ var VolumeModel = pythreejs.Object3DModel.extend({
         this.tf_set()
         this.data_set()
         var update_rendering_method = () => {
-            this.renderer.rebuild_multivolume_rendering_material()
+            this.trigger('need_multivolume_material_update');
             this.trigger('need_render');
         }
         this.on('change:rendering_method', update_rendering_method)
@@ -83,7 +83,7 @@ var VolumeModel = pythreejs.Object3DModel.extend({
         var update_minmax = () => {
             this.uniform_volumes_values.data_range = [this.get('data_min'), this.get('data_max')]
             this.uniform_volumes_values.show_range = [this.get('show_min'), this.get('show_max')]
-            this.renderer.rebuild_multivolume_rendering_material()
+            this.trigger('need_multivolume_material_update');
             this.trigger('need_render');
         }
         this.on('change:data_min change:data_max change:show_min change:show_max', update_minmax, this);
@@ -92,7 +92,7 @@ var VolumeModel = pythreejs.Object3DModel.extend({
         var update_clamp = () => {
             this.uniform_volumes_values.clamp_min = this.get('clamp_min')
             this.uniform_volumes_values.clamp_max = this.get('clamp_max')
-            this.renderer.rebuild_multivolume_rendering_material()
+            this.trigger('need_multivolume_material_update');
             this.trigger('need_render');
         }
         this.on('change:clamp_min change:clamp_max', update_clamp, this);
@@ -100,7 +100,7 @@ var VolumeModel = pythreejs.Object3DModel.extend({
 
         var update_opacity_scale = () => {
             this.uniform_volumes_values.opacity_scale = this.get('opacity_scale')
-            this.renderer.rebuild_multivolume_rendering_material()
+            this.trigger('need_multivolume_material_update');
             this.trigger('need_render');
         }
         update_opacity_scale()
@@ -108,14 +108,14 @@ var VolumeModel = pythreejs.Object3DModel.extend({
 
         var update_lighting = () => {
             this.uniform_volumes_values.lighting = this.get('lighting')
-            this.renderer.rebuild_multivolume_rendering_material()
+            this.trigger('need_multivolume_material_update');
             this.trigger('need_render');
         }
         update_lighting()
         this.on('change:lighting', update_lighting)
 
         var update_ray_steps = () => {
-            this.renderer.rebuild_multivolume_rendering_material()
+            this.trigger('need_multivolume_material_update');
             this.trigger('need_render');
         }
         update_ray_steps()
@@ -124,7 +124,7 @@ var VolumeModel = pythreejs.Object3DModel.extend({
 
         var update_brightness = () => {
             this.uniform_volumes_values.brightness = this.get('brightness')
-            this.renderer.rebuild_multivolume_rendering_material()
+            this.trigger('need_multivolume_material_update');
             this.trigger('need_render');
         }
         update_brightness()
@@ -133,7 +133,7 @@ var VolumeModel = pythreejs.Object3DModel.extend({
         this.on('change:tf', this.tf_set, this)
 
         this.on('change:extent', () => {
-            this.renderer.rebuild_multivolume_rendering_material()
+            this.trigger('need_multivolume_material_update');
             this.trigger('need_render');
         })
 
@@ -155,24 +155,26 @@ var VolumeModel = pythreejs.Object3DModel.extend({
     },
     data_set: function() {
         this.volume = this.get("data")
-        var data = new Uint8Array(this.volume.tiles.buffer)
-        this.texture_volume = new THREE.DataTexture(data, this.volume.image_shape[0], this.volume.image_shape[1],
-                                                    THREE.RGBAFormat, THREE.UnsignedByteType)
-        this.texture_volume.magFilter = THREE.LinearFilter
-        this.texture_volume.minFilter = THREE.LinearFilter
-        this.uniform_volumes_values.rows = this.volume.rows
-        this.uniform_volumes_values.columns = this.volume.columns
-        this.uniform_volumes_values.slices = this.volume.slices
-        this.uniform_volumes_values.size = this.volume.image_shape
-        this.uniform_volumes_values.slice_size = this.volume.slice_shape
-        this.uniform_data.value = [this.texture_volume]
-        this.uniform_data.value = [this.texture_volume]
-        this.uniform_volumes_values.data_range = [this.get('data_min'), this.get('data_max')]
-        this.uniform_volumes_values.show_range = [this.get('show_min'), this.get('show_max')]
-        this.texture_volume.needsUpdate = true // without this it doesn't seem to work
-        this.data_shape = [this.volume.slice_shape[0], this.volume.slice_shape[1], this.volume.slices]
-        this.renderer.rebuild_multivolume_rendering_material()
-        this.trigger('need_render');
+        if(this.volume != null){ // Sometimes initialization of the object3d model goes to fast and data is not prepared yet.
+            var data = new Uint8Array(this.volume.tiles.buffer)
+            this.texture_volume = new THREE.DataTexture(data, this.volume.image_shape[0], this.volume.image_shape[1],
+                                                        THREE.RGBAFormat, THREE.UnsignedByteType)
+            this.texture_volume.magFilter = THREE.LinearFilter
+            this.texture_volume.minFilter = THREE.LinearFilter
+            this.uniform_volumes_values.rows = this.volume.rows
+            this.uniform_volumes_values.columns = this.volume.columns
+            this.uniform_volumes_values.slices = this.volume.slices
+            this.uniform_volumes_values.size = this.volume.image_shape
+            this.uniform_volumes_values.slice_size = this.volume.slice_shape
+            this.uniform_data.value = [this.texture_volume]
+            this.uniform_data.value = [this.texture_volume]
+            this.uniform_volumes_values.data_range = [this.get('data_min'), this.get('data_max')]
+            this.uniform_volumes_values.show_range = [this.get('show_min'), this.get('show_max')]
+            this.texture_volume.needsUpdate = true // without this it doesn't seem to work
+            this.data_shape = [this.volume.slice_shape[0], this.volume.slice_shape[1], this.volume.slices]
+            this.trigger('need_multivolume_material_update');
+            this.trigger('need_render');
+        }
     },
     tf_set: function() {
         // TODO: remove listeners from previous
@@ -196,7 +198,7 @@ var VolumeModel = pythreejs.Object3DModel.extend({
             // this.box_material_volr.uniforms.transfer_function.value = [this.texture_tf]
             this.uniform_transfer_function.value = [this.texture_tf]
         }
-        this.renderer.rebuild_multivolume_rendering_material()
+        this.trigger('need_multivolume_material_update');
         this.trigger('need_render');
     },
     set_limits: function(limits) {
@@ -207,7 +209,7 @@ var VolumeModel = pythreejs.Object3DModel.extend({
         var dy = (ylim[1] - ylim[0])
         var dz = (zlim[1] - zlim[0])
 
-        var extent = this.model.get('extent')
+        var extent = this.get('extent')
 
        // normalized coordinates of the corners of the box 
         var x0n = (extent[0][0]-xlim[0])/dx
