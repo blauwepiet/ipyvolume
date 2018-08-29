@@ -1664,7 +1664,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
             this.renderer.context.colorMask(true, true, true, true)
 
             // TODO: if volume perfectly overlap, we render it twice, use polygonoffset and LESS z test?
-            _.each(this.volume_models, volume_model => {
+            _.each(volume_models, volume_model => {
                 volume_model.vol_box_mesh.material = this.material_multivolume;
                 // volume_model.set_geometry_depth_tex(this.geometry_depth_target.depthTexture)
             },this)
