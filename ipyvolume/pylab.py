@@ -699,7 +699,7 @@ def volshow(data, lighting=False, data_min=None, data_max=None,
                     diffuse_coefficient = diffuse_coefficient,
                     specular_coefficient = specular_coefficient,
                     specular_exponent = specular_exponent,
-                    rendering_lighting = lighting)
+                    lighting = lighting)
 
     vol._listen_to(fig)
 
