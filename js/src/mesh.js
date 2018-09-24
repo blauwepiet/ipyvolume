@@ -59,6 +59,9 @@ var MeshModel = pythreejs.Object3DModel.extend({
         this.on("change:texture", this._load_textures, this)
         this.on("change:visible", this.update_visibility, this)
     },
+    set_renderer: function (renderer) {
+        this.renderer = renderer;
+    },
     update_visibility: function () {
         this._update_materials()
         this.trigger('need_render');

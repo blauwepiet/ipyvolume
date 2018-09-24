@@ -1268,7 +1268,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         if(object3D_models.length != 0) { // So now check if list has length 0
             _.each(object3D_models, object3D_model => {
                 if(object3D_model.renderer == null){
-                    object3D_model.renderer = this;
+                    object3D_model.set_renderer(this);
                 }
                 if(object3D_model.name == 'VolumeModel'){
                     this.scene_volume.add(object3D_model.obj)

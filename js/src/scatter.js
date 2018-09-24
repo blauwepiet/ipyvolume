@@ -111,6 +111,9 @@ var ScatterModel = pythreejs.Object3DModel.extend({
             this.trigger('need_render');
         })
     },
+    set_renderer: function (renderer) {
+        this.renderer = renderer;
+    },
     _load_textures: function() {
         var texture = this.get('texture');
         if(texture.stream) { // instanceof media.MediaStreamModel) {

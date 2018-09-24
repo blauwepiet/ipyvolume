@@ -140,6 +140,9 @@ var VolumeModel = pythreejs.Object3DModel.extend({
         window.last_volume = this; // for debugging purposes
 
     },
+    set_renderer: function (renderer) {
+        this.renderer = renderer;
+    },
     get_ray_steps: function() {
         var ray_steps = this.get('ray_steps');
         if(ray_steps == null) {
