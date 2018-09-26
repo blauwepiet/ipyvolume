@@ -622,6 +622,8 @@ var FigureView = widgets.DOMWidgetView.extend( {
         this.scene_geometry = new THREE.Scene();
         //this.scene_geometry.add(this.camera);
 
+        this.scene_tools = new THREE.Scene();
+
         this.scene_opaque = new THREE.Scene();
         //this.scene_opaque.add(this.camera);
         this.scene_opaque.add(this.wire_box)
@@ -805,7 +807,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         var update_center = () => {
             // WARNING: we cheat a little by setting the scene positions (hence the minus) since it is
             // easier, might get us in trouble later?
-            _.each([this.scene_volume, this.scene_opaque, this.scene_geometry], scene => {
+            _.each([this.scene_volume, this.scene_opaque, this.scene_geometry, this.scene_tools], scene => {
                 var pos = this.model.get('camera_center');
                 scene.position.set(-pos[0], -pos[1], -pos[2])
             })
@@ -1274,6 +1276,9 @@ var FigureView = widgets.DOMWidgetView.extend( {
                     this.scene_volume.add(object3D_model.obj)
                     object3D_model.on('need_multivolume_material_update', this.rebuild_multivolume_rendering_material, this);
                 }
+                else if(object3D_model.model_class == 'tool'){
+                    this.scene_tools.add(object3D_model.obj)
+                }
                 else{
                     this.scene_geometry.add(object3D_model.obj)    
                 }
@@ -1325,7 +1330,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         this.box_mesh.rotation.x = -(e.beta * Math.PI / 180 + Math.PI*2);
         this.box_mesh.rotation.y = -(e.gamma * Math.PI / 180 + Math.PI*2);*/
 
-        _.each([this.scene_volume, this.scene_opaque, this.scene_geometry], scene => {
+        _.each([this.scene_volume, this.scene_opaque, this.scene_geometry, this.scene_tools], scene => {
             scene.rotation.reorder( "XYZ" );
             scene.rotation.x = (e.gamma * Math.PI / 180 + Math.PI*2);
             scene.rotation.y = -(e.beta * Math.PI / 180 + Math.PI*2);
@@ -1573,7 +1578,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
     _render_eye: function(camera) {
         this.camera.updateMatrixWorld();
         var volume_models = _.filter(this.model.get("object3D_models"), object3D_model => { return object3D_model.name == 'VolumeModel'; }, this)
-        var other_models = _.filter(this.model.get("object3D_models"), object3D_model => { return object3D_model.name != 'VolumeModel'; }, this)
+        var other_models = _.filter(this.model.get("object3D_models"), object3D_model => { return object3D_model.name != 'VolumeModel' && object3D_model.model_class != 'tool'  ; }, this)
         var has_volumes = volume_models.length != 0;
         var panorama = this.model.get('panorama_mode') != 'no';
 
@@ -1636,6 +1641,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
             this.renderer.autoClear = false;
             this.renderer.clearTarget(this.geometry_depth_target, true, true, true)
             this.renderer.render(this.scene_geometry, camera, this.geometry_depth_target);
+            this.renderer.render(this.scene_tools, camera, this.geometry_depth_target);
             this.renderer.render(this.scene_opaque, camera, this.geometry_depth_target);
             this.renderer.autoClear = true;
 
@@ -1645,6 +1651,7 @@ var FigureView = widgets.DOMWidgetView.extend( {
         this.renderer.autoClear = false;
         this.renderer.clearTarget(this.color_pass_target, true, true, true)
         this.renderer.render(this.scene_geometry, camera, this.color_pass_target);
+        this.renderer.render(this.scene_tools, camera, this.color_pass_target);
         this.renderer.render(this.scene_opaque, camera, this.color_pass_target);
         this.renderer.autoClear = true;
 
