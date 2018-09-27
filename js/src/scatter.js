@@ -58,7 +58,8 @@ var ScatterModel = pythreejs.Object3DModel.extend({
         this.geo_circle_2d = new THREE.CircleGeometry(1, 32, Math.PI/2);
 
         //this.geo = new THREE.ConeGeometry(0.2, 1)
-        this.geo_arrow = new THREE.CylinderGeometry(0, 0.2, 1)
+        this.geo_arrow = new THREE.CylinderGeometry(0.05, 0.05, 1)
+        this.geo_arrow.translate(0, 0.5, 0);
         this.geos = {
             diamond: this.geo_diamond,
             box: this.geo_box,

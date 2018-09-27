@@ -77,7 +77,7 @@ void main(void) {
         vec4 view_pos = modelViewMatrix * vec4(model_pos, 1.0);
         view_pos += vec4((position.xy)*(s*0.5),0,0);
     #else
-        model_pos += move_to_vector * (position)*s;
+        model_pos += move_to_vector * ((position)*s/size_viewport);
         vec4 view_pos = modelViewMatrix * vec4(model_pos, 1.0);
     #endif
 #endif
